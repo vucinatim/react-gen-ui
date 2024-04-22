@@ -101,9 +101,10 @@ export class ChatCompletion {
     fetchEventSource(`${this.api.basePath}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
         Authorization: `Bearer ${this.api.apiKey}`,
       },
+      body: this.serializeParams(),
       onmessage: (event) => {
         this.handleNewChunk(event);
       },
