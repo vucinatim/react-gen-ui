@@ -13,6 +13,10 @@ import {
   sleep,
   toolsToJsonSchema,
 } from './utils';
+import {
+  EventSourceMessage,
+  fetchEventSource,
+} from '@microsoft/fetch-event-source';
 
 // Tool's render function can return either data or a component
 export type ChatCompletionMessageOrReactElement =
@@ -62,6 +66,10 @@ export interface ChatCompletionCallbacks {
   onError?: (error: Error) => void;
 }
 
+type ErrorResponse = {
+  message: string;
+};
+
 export class ChatCompletion {
   private eventSource: EventSource | null = null;
   private api: OpenAIApi;
@@ -90,18 +98,31 @@ export class ChatCompletion {
 
   // Inits the completion and starts the streaming
   start() {
-    const url = `${this.api.basePath}/chat/completions?apiKey=${encodeURIComponent(this.api.apiKey)}`;
-    this.eventSource = new EventSource(url);
-
-    this.eventSource.onmessage = (event) => this.handleNewChunk(event);
-    this.eventSource.onerror = (event) => {
-      console.error('Connection error:', event);
-      this.callbacks.onError?.(new Error('SSE Connection Error'));
-    };
+    fetchEventSource(`${this.api.basePath}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.api.apiKey}`,
+      },
+      onmessage: (event) => {
+        this.handleNewChunk(event);
+      },
+      onerror: (error) => {
+        console.error('Error:', error);
+        this.callbacks.onError?.(new Error((error as ErrorResponse).message));
+      },
+    })
+      .then(() => {
+        console.log('Connection established.');
+      })
+      .catch((error) => {
+        console.error('Connection error:', error);
+        this.callbacks.onError?.(new Error((error as ErrorResponse).message));
+      });
   }
 
   // Handles a new chunk received
-  private handleNewChunk(event: MessageEvent) {
+  private handleNewChunk(event: EventSourceMessage) {
     // If [DONE], close the connection and mark as done
     if (event.data === '[DONE]') {
       this.eventSource?.close();
@@ -116,7 +137,7 @@ export class ChatCompletion {
     }
 
     // Parse the message as a ChatCompletionChunk
-    const e = JSON.parse(event.data as string) as ChatCompletionChunk;
+    const e = JSON.parse(event.data) as ChatCompletionChunk;
 
     // Again, handle empty messages
     if (e.choices == null || e.choices.length === 0) {
