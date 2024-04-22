@@ -125,7 +125,6 @@
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
-    "react": "^18.2.0",
-    "react-native": "^0.73.6"
+    "react": "^18.2.0"
   }
 }
